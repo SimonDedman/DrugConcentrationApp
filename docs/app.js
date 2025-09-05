@@ -263,7 +263,6 @@ class DrugConcentrationApp {
                 font: { size: 20, family: 'Arial, sans-serif' }
             },
             xaxis: {
-                title: 'Time',
                 gridcolor: '#E0E0E0',
                 gridwidth: 1,
                 tickformat: '%b %d %H:%M',
@@ -352,6 +351,13 @@ class DrugConcentrationApp {
                 DrugNormalization.normalizeToSubjectiveEffects(conc, doseEntry.drug)
             );
             
+            // Debug logging
+            if (doseEntry.drug === 'alcohol') {
+                console.log(`Alcohol debug - Dose: ${doseEntry.dose} ${doseEntry.unit}`);
+                console.log(`Raw concentrations (first 5):`, curve.concentrations.slice(0, 5));
+                console.log(`Normalized concentrations (first 5):`, normalizedConcentrations.slice(0, 5));
+            }
+            
             // Create plot trace
             const drugName = doseEntry.drug.charAt(0).toUpperCase() + doseEntry.drug.slice(1);
             const traceName = `${drugName} ${doseEntry.dose}${doseEntry.unit} (${doseEntry.route})`;
@@ -389,7 +395,8 @@ class DrugConcentrationApp {
         
         plotData.push(currentTimeTrace);
         
-        // Add reference lines for BAC equivalence (BAC is in g/dL, need mg/dL)
+        // Add reference lines for BAC equivalence only if they don't extend Y range
+        const maxDataValue = Math.max(...plotData.filter(d => d.name !== 'Current Time').flatMap(d => d.y));
         const referenceLines = [
             { level: 30, label: 'Mild (0.03% BAC equiv)', color: '#FFC107' },
             { level: 50, label: 'Moderate (0.05% BAC equiv)', color: '#FF9800' },
@@ -397,20 +404,22 @@ class DrugConcentrationApp {
         ];
         
         referenceLines.forEach(ref => {
-            plotData.push({
-                x: [startTime, endTime],
-                y: [ref.level, ref.level],
-                mode: 'lines',
-                name: ref.label,
-                line: {
-                    color: ref.color,
-                    width: 1,
-                    dash: 'dot'
-                },
-                hovertemplate: ref.label + '<extra></extra>',
-                showlegend: true,
-                hoverinfo: 'skip'
-            });
+            if (ref.level <= maxDataValue * 1.1) { // Only show if within 110% of max data
+                plotData.push({
+                    x: [startTime, endTime],
+                    y: [ref.level, ref.level],
+                    mode: 'lines',
+                    name: ref.label,
+                    line: {
+                        color: ref.color,
+                        width: 1,
+                        dash: 'dot'
+                    },
+                    hovertemplate: ref.label + '<extra></extra>',
+                    showlegend: true,
+                    hoverinfo: 'skip'
+                });
+            }
         });
         
         // Create layout
@@ -420,7 +429,6 @@ class DrugConcentrationApp {
                 font: { size: 20, family: 'Arial, sans-serif' }
             },
             xaxis: {
-                title: 'Time',
                 gridcolor: '#E0E0E0',
                 gridwidth: 1,
                 tickformat: '%b %d %H:%M',
