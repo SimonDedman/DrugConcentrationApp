@@ -71,7 +71,7 @@
             max-height: 300px;
             overflow-y: auto;
         }
-        #plot {
+        #plot, #subjectivePlot {
             width: 100%;
             height: 600px;
             margin-top: 20px;
@@ -166,9 +166,10 @@
             <div id="doseList" class="drug-list"></div>
         </div>
 
-        <button onclick="updatePlot()" style="width: 100%; font-size: 18px; padding: 15px;">Update Concentration Plot</button>
+        <button onclick="updatePlot()" style="width: 100%; font-size: 18px; padding: 15px;">Update Concentration Plots</button>
 
         <div id="plot"></div>
+        <div id="subjectivePlot" style="margin-top: 30px;"></div>
     </div>
 
     <script src="pharmacokinetics.js"></script>

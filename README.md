@@ -2,6 +2,8 @@
 
 A web-based application for tracking and visualizing blood drug concentrations over time using scientifically-backed pharmacokinetic models.
 
+**🌐 Live App: [https://simondedman.github.io/DrugConcentrationApp/](https://simondedman.github.io/DrugConcentrationApp/)**
+
 ## ⚠️ Important Disclaimer
 
 **This tool is for educational purposes only.** The calculations provided are approximations based on population averages and should **never** be used for:

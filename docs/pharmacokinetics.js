@@ -195,12 +195,41 @@ class DrugNormalization {
         return concentration * potency;
     }
     
-    // Get impairment level description
-    static getImpairmentLevel(normalizedConcentration) {
-        if (normalizedConcentration < 5) return "Minimal";
-        if (normalizedConcentration < 20) return "Mild";
-        if (normalizedConcentration < 50) return "Moderate";
-        if (normalizedConcentration < 100) return "Significant";
-        return "Severe";
+    // Research-based subjective effects normalization
+    // Based on published studies comparing subjective intoxication levels
+    static getSubjectiveEffectsFactor(drugType) {
+        const factors = {
+            // Reference: Standard drink = ~0.02 BAC increase
+            alcohol: 1.0, // BAC mg/dL directly correlates with subjective impairment
+            
+            // THC: Peak subjective effects at ~10-20 ng/mL (inhaled), ~5-10 ng/mL (oral)
+            // Equivalent to ~0.05-0.08 BAC subjective impairment
+            thc: 4.0, // 10 ng/mL THC ≈ 40 mg/dL BAC subjectively
+            
+            // MDMA: Peak subjective effects at ~150-250 ng/mL
+            // Moderate empathogenic effects ≈ 0.05-0.08 BAC equivalent
+            mdma: 0.3, // 150 ng/mL MDMA ≈ 45 mg/dL BAC subjectively
+            
+            // Psilocin: Peak effects at ~15-25 ng/mL
+            // Strong psychedelic effects ≈ 0.08+ BAC equivalent subjective impairment
+            psilocybin: 4.0 // 20 ng/mL psilocin ≈ 80 mg/dL BAC subjectively
+        };
+        return factors[drugType] || 1.0;
+    }
+    
+    // Convert to subjective effects units (alcohol-equivalent mg/dL)
+    static normalizeToSubjectiveEffects(concentration, drugType) {
+        const factor = this.getSubjectiveEffectsFactor(drugType);
+        return concentration * factor;
+    }
+    
+    // Get impairment level description based on alcohol-equivalent BAC
+    static getImpairmentLevel(alcoholEquivalentBAC) {
+        if (alcoholEquivalentBAC < 10) return "Minimal";      // < 0.01 BAC
+        if (alcoholEquivalentBAC < 30) return "Mild";         // 0.01-0.03 BAC  
+        if (alcoholEquivalentBAC < 50) return "Moderate";     // 0.03-0.05 BAC
+        if (alcoholEquivalentBAC < 80) return "Significant";  // 0.05-0.08 BAC
+        if (alcoholEquivalentBAC < 150) return "Severe";      // 0.08-0.15 BAC
+        return "Dangerous";                                    // > 0.15 BAC
     }
 }
