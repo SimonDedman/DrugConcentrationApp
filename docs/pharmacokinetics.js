@@ -108,9 +108,13 @@ class PharmacokineticCalculator {
         
         if (t <= 0) return 0;
         
-        // Convert dose to blood alcohol concentration
-        const Vd = 0.53 * bodyWeight * 1000; // mL
-        const peakBAC = (F * dose) / Vd; // mg/dL
+        // Convert dose to blood alcohol concentration using Widmark formula
+        // BAC (%) = (grams × 0.806) / (bodyWeight_kg × r) where r = 0.68 for men
+        // BAC (mg/dL) = BAC (%) × 1000
+        // dose is in mg, so convert to grams first
+        const doseGrams = (F * dose) / 1000;
+        const peakBACPercent = (doseGrams * 0.806) / (bodyWeight * 0.68);
+        const peakBAC = peakBACPercent * 1000; // Convert % to mg/dL
         
         // Absorption phase (first-order-like to peak)
         if (t <= tmax) {

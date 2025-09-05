@@ -191,8 +191,8 @@ class DrugConcentrationApp {
         const roundedNow = new Date();
         roundedNow.setMinutes(Math.floor(roundedNow.getMinutes() / 30) * 30, 0, 0);
         
-        // Plot from rounded current time to 48 hours after latest dose
-        const startTime = new Date(Math.min(roundedNow.getTime(), earliestTime.getTime() - 6 * 60 * 60 * 1000));
+        // Plot from rounded current time 
+        const startTime = roundedNow;
         const endTime = new Date(latestTime.getTime() + 48 * 60 * 60 * 1000);
         
         // Drug colors for plotting
@@ -319,8 +319,8 @@ class DrugConcentrationApp {
         const roundedNow = new Date();
         roundedNow.setMinutes(Math.floor(roundedNow.getMinutes() / 30) * 30, 0, 0);
         
-        // Plot from rounded current time to 48 hours after latest dose
-        const startTime = new Date(Math.min(roundedNow.getTime(), earliestTime.getTime() - 6 * 60 * 60 * 1000));
+        // Plot from rounded current time 
+        const startTime = roundedNow;
         const endTime = new Date(latestTime.getTime() + 48 * 60 * 60 * 1000);
         
         // Drug colors for plotting
