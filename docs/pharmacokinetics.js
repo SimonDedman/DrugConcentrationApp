@@ -36,7 +36,7 @@ class DrugParameters {
             mdma: {
                 oral: {
                     bioavailability: 0.75, // Variable due to non-linear kinetics
-                    absorptionRate: 0.5, // hours
+                    absorptionRate: 2.0, // 1/hr (faster absorption to reach tmax at 2hr)
                     eliminationRate: 0.087, // 1/hr (8-hour half-life)
                     volumeOfDistribution: 4, // L/kg
                     halfLife: 8, // hours
@@ -108,13 +108,11 @@ class PharmacokineticCalculator {
         
         if (t <= 0) return 0;
         
-        // Convert dose to blood alcohol concentration using Widmark formula
-        // BAC (%) = (grams × 0.806) / (bodyWeight_kg × r) where r = 0.68 for men
-        // BAC (mg/dL) = BAC (%) × 1000
-        // dose is in mg, so convert to grams first
-        const doseGrams = (F * dose) / 1000;
-        const peakBACPercent = (doseGrams * 0.806) / (bodyWeight * 0.68);
-        const peakBAC = peakBACPercent * 1000; // Convert % to mg/dL
+        // Convert dose to blood alcohol concentration using simplified Widmark formula
+        // BAC (mg/dL) = (dose_grams × F) / (bodyWeight_kg × 0.68)
+        // Standard: 1 drink (14g) in 70kg person ≈ 20 mg/dL BAC
+        const doseGrams = dose / 1000; // Convert mg to grams
+        const peakBAC = (doseGrams * F) / (bodyWeight * 0.68); // mg/dL
         
         // Absorption phase (first-order-like to peak)
         if (t <= tmax) {
@@ -211,8 +209,8 @@ class DrugNormalization {
             thc: 4.0, // 10 ng/mL THC ≈ 40 mg/dL BAC subjectively
             
             // MDMA: Peak subjective effects at ~150-250 ng/mL
-            // Moderate empathogenic effects ≈ 0.05-0.08 BAC equivalent
-            mdma: 0.3, // 150 ng/mL MDMA ≈ 45 mg/dL BAC subjectively
+            // Moderate empathogenic effects ≈ 0.05-0.08 BAC equivalent  
+            mdma: 0.4, // 200 ng/mL MDMA ≈ 80 mg/dL BAC subjectively
             
             // Psilocin: Peak effects at ~15-25 ng/mL
             // Strong psychedelic effects ≈ 0.08+ BAC equivalent subjective impairment
