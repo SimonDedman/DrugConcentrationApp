@@ -108,11 +108,12 @@ class PharmacokineticCalculator {
         
         if (t <= 0) return 0;
         
-        // Convert dose to blood alcohol concentration using simplified Widmark formula
-        // BAC (mg/dL) = (dose_grams × F) / (bodyWeight_kg × 0.68)
-        // Standard: 1 drink (14g) in 70kg person ≈ 20 mg/dL BAC
+        // Use empirical BAC calculation based on known values
+        // 1 drink (14g) ≈ 25 mg/dL BAC for 70kg male after bioavailability
+        // Scale by body weight: lighter people get higher BAC
         const doseGrams = dose / 1000; // Convert mg to grams
-        const peakBAC = (doseGrams * F) / (bodyWeight * 0.68); // mg/dL
+        const effectiveDose = doseGrams * F; // Apply bioavailability
+        const peakBAC = (effectiveDose / 14) * 25 * (70 / bodyWeight); // mg/dL
         
         // Absorption phase (first-order-like to peak)
         if (t <= tmax) {

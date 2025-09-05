@@ -351,12 +351,6 @@ class DrugConcentrationApp {
                 DrugNormalization.normalizeToSubjectiveEffects(conc, doseEntry.drug)
             );
             
-            // Debug logging
-            if (doseEntry.drug === 'alcohol') {
-                console.log(`Alcohol debug - Dose: ${doseEntry.dose} ${doseEntry.unit}`);
-                console.log(`Raw concentrations (first 5):`, curve.concentrations.slice(0, 5));
-                console.log(`Normalized concentrations (first 5):`, normalizedConcentrations.slice(0, 5));
-            }
             
             // Create plot trace
             const drugName = doseEntry.drug.charAt(0).toUpperCase() + doseEntry.drug.slice(1);
