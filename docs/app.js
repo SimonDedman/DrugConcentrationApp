@@ -187,8 +187,12 @@ class DrugConcentrationApp {
         const earliestTime = new Date(Math.min(...doseTimes));
         const latestTime = new Date(Math.max(...doseTimes));
         
-        // Plot from 6 hours before earliest dose to 48 hours after latest dose
-        const startTime = new Date(earliestTime.getTime() - 6 * 60 * 60 * 1000);
+        // Round current time to previous 30-minute mark
+        const roundedNow = new Date();
+        roundedNow.setMinutes(Math.floor(roundedNow.getMinutes() / 30) * 30, 0, 0);
+        
+        // Plot from rounded current time to 48 hours after latest dose
+        const startTime = new Date(Math.min(roundedNow.getTime(), earliestTime.getTime() - 6 * 60 * 60 * 1000));
         const endTime = new Date(latestTime.getTime() + 48 * 60 * 60 * 1000);
         
         // Drug colors for plotting
@@ -235,7 +239,7 @@ class DrugConcentrationApp {
             });
         });
         
-        // Add current time marker
+        // Add current time marker (but don't snap hover to it)
         const currentTimeTrace = {
             x: [now, now],
             y: [0, Math.max(...plotData.flatMap(d => d.y)) * 1.1],
@@ -246,7 +250,8 @@ class DrugConcentrationApp {
                 width: 2,
                 dash: 'dash'
             },
-            hovertemplate: 'Current Time<extra></extra>'
+            hovertemplate: 'Current Time<extra></extra>',
+            hoverinfo: 'skip' // Don't include in hover events
         };
         
         plotData.push(currentTimeTrace);
@@ -261,7 +266,7 @@ class DrugConcentrationApp {
                 title: 'Time',
                 gridcolor: '#E0E0E0',
                 gridwidth: 1,
-                tickformat: '%m/%d %H:%M',
+                tickformat: '%b %d %H:%M',
                 range: [startTime, endTime],
                 dtick: 30 * 60 * 1000 // 30-minute intervals in milliseconds
             },
@@ -283,7 +288,7 @@ class DrugConcentrationApp {
                 borderwidth: 1
             },
             margin: { l: 80, r: 150, t: 80, b: 80 },
-            hovermode: 'closest'
+            hovermode: 'x unified'
         };
         
         // Plot configuration
@@ -310,8 +315,12 @@ class DrugConcentrationApp {
         const earliestTime = new Date(Math.min(...doseTimes));
         const latestTime = new Date(Math.max(...doseTimes));
         
-        // Plot from 6 hours before earliest dose to 48 hours after latest dose
-        const startTime = new Date(earliestTime.getTime() - 6 * 60 * 60 * 1000);
+        // Round current time to previous 30-minute mark
+        const roundedNow = new Date();
+        roundedNow.setMinutes(Math.floor(roundedNow.getMinutes() / 30) * 30, 0, 0);
+        
+        // Plot from rounded current time to 48 hours after latest dose
+        const startTime = new Date(Math.min(roundedNow.getTime(), earliestTime.getTime() - 6 * 60 * 60 * 1000));
         const endTime = new Date(latestTime.getTime() + 48 * 60 * 60 * 1000);
         
         // Drug colors for plotting
@@ -363,7 +372,7 @@ class DrugConcentrationApp {
             });
         });
         
-        // Add current time marker
+        // Add current time marker (but don't snap hover to it)
         const currentTimeTrace = {
             x: [now, now],
             y: [0, Math.max(...plotData.flatMap(d => d.y)) * 1.1 || 100],
@@ -374,16 +383,17 @@ class DrugConcentrationApp {
                 width: 2,
                 dash: 'dash'
             },
-            hovertemplate: 'Current Time<extra></extra>'
+            hovertemplate: 'Current Time<extra></extra>',
+            hoverinfo: 'skip' // Don't include in hover events
         };
         
         plotData.push(currentTimeTrace);
         
-        // Add reference lines for BAC equivalence
+        // Add reference lines for BAC equivalence (BAC is in g/dL, need mg/dL)
         const referenceLines = [
-            { level: 30, label: 'Mild (0.03 BAC equiv)', color: '#FFC107' },
-            { level: 50, label: 'Moderate (0.05 BAC equiv)', color: '#FF9800' },
-            { level: 80, label: 'Legal Limit (0.08 BAC equiv)', color: '#F44336' }
+            { level: 30, label: 'Mild (0.03% BAC equiv)', color: '#FFC107' },
+            { level: 50, label: 'Moderate (0.05% BAC equiv)', color: '#FF9800' },
+            { level: 80, label: 'Legal Limit (0.08% BAC equiv)', color: '#F44336' }
         ];
         
         referenceLines.forEach(ref => {
@@ -398,7 +408,8 @@ class DrugConcentrationApp {
                     dash: 'dot'
                 },
                 hovertemplate: ref.label + '<extra></extra>',
-                showlegend: true
+                showlegend: true,
+                hoverinfo: 'skip'
             });
         });
         
@@ -412,7 +423,7 @@ class DrugConcentrationApp {
                 title: 'Time',
                 gridcolor: '#E0E0E0',
                 gridwidth: 1,
-                tickformat: '%m/%d %H:%M',
+                tickformat: '%b %d %H:%M',
                 range: [startTime, endTime],
                 dtick: 30 * 60 * 1000 // 30-minute intervals in milliseconds
             },
@@ -434,7 +445,7 @@ class DrugConcentrationApp {
                 borderwidth: 1
             },
             margin: { l: 80, r: 150, t: 80, b: 80 },
-            hovermode: 'closest'
+            hovermode: 'x unified'
         };
         
         // Plot configuration
@@ -483,7 +494,7 @@ class DrugConcentrationApp {
             <div style="margin-top: 15px; padding: 15px; background: #e9ecef; border-radius: 4px;">
                 <strong>Combined Subjective Effect Level: ${impairmentLevel}</strong><br>
                 <small>Total BAC-equivalent: ${totalSubjectiveEffects.toFixed(1)} mg/dL</small><br>
-                <small style="color: #666;">For reference: 0.08 BAC = 80 mg/dL (legal limit in many places)</small>
+                <small style="color: #666;">For reference: 0.08% BAC = 80 mg/dL (legal limit in many places)</small>
             </div>
         `;
         
