@@ -62,6 +62,7 @@ class DrugConcentrationApp {
         const placeholders = {
             alcohol: '1-3',
             thc: '5-25',
+            cbd: '10-100',
             mdma: '75-150',
             psilocybin: '15-30'
         };
@@ -82,7 +83,13 @@ class DrugConcentrationApp {
             ],
             thc: [
                 { value: 'oral', text: 'Oral (edibles)' },
-                { value: 'inhaled', text: 'Inhaled (smoking/vaping)' }
+                { value: 'inhaled', text: 'Inhaled (smoking/vaping)' },
+                { value: 'liquid', text: 'Oral (liquid/tincture)' }
+            ],
+            cbd: [
+                { value: 'oral', text: 'Oral (edibles/capsules)' },
+                { value: 'inhaled', text: 'Inhaled (smoking/vaping)' },
+                { value: 'liquid', text: 'Oral (liquid/tincture)' }
             ],
             mdma: [
                 { value: 'oral', text: 'Oral (pills/crystals)' }
@@ -178,6 +185,53 @@ class DrugConcentrationApp {
         this.generateSubjectiveEffectsPlot(bodyWeight, age);
     }
     
+    getDrugDuration(drugType) {
+        // Get typical duration for drug effects (in hours)
+        const durations = {
+            alcohol: 16, // Extended to ensure plot continues until BAC hits zero
+            thc: 24, 
+            mdma: 24,
+            psilocybin: 12
+        };
+        return durations[drugType] || 24;
+    }
+    
+    createDoseHistory(doses) {
+        // Create a summary of all doses for tooltip
+        return doses.map(dose => {
+            const time = new Date(dose.time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            return `${dose.dose}${dose.unit} at ${time}`;
+        }).join(', ');
+    }
+    
+    createDateAnnotations(startTime, endTime) {
+        // Create date annotations for start of each day
+        const annotations = [];
+        const current = new Date(startTime);
+        current.setHours(0, 0, 0, 0); // Start of day
+        
+        while (current <= endTime) {
+            if (current >= startTime) {
+                annotations.push({
+                    x: current.getTime(),
+                    y: 0,
+                    xref: 'x',
+                    yref: 'paper',
+                    text: current.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}),
+                    showarrow: false,
+                    font: {size: 10, color: '#666'},
+                    yshift: -30,
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    bordercolor: '#ccc',
+                    borderwidth: 1
+                });
+            }
+            current.setDate(current.getDate() + 1); // Next day
+        }
+        
+        return annotations;
+    }
+    
     generateConcentrationPlot(bodyWeight, age) {
         const plotData = [];
         const now = new Date();
@@ -193,48 +247,81 @@ class DrugConcentrationApp {
         
         // Plot from rounded current time 
         const startTime = roundedNow;
-        const endTime = new Date(latestTime.getTime() + 48 * 60 * 60 * 1000);
+        const endTime = new Date(latestTime.getTime() + 24 * 60 * 60 * 1000);
         
         // Drug colors for plotting
         const drugColors = {
             alcohol: '#FF6B6B',
             thc: '#4ECDC4',
+            cbd: '#95A5A6',
             mdma: '#45B7D1',
             psilocybin: '#96CEB4'
         };
         
-        // Generate curves for each dose
-        this.doses.forEach((doseEntry, index) => {
-            const dose = DrugParameters.convertDose(doseEntry.dose, doseEntry.unit, doseEntry.drug);
-            const doseStartTime = new Date(doseEntry.time);
+        // Group doses by drug type for additive effects
+        const drugGroups = {};
+        this.doses.forEach(doseEntry => {
+            if (!drugGroups[doseEntry.drug]) {
+                drugGroups[doseEntry.drug] = [];
+            }
+            drugGroups[doseEntry.drug].push(doseEntry);
+        });
+        
+        // Generate combined curves for each drug type
+        Object.entries(drugGroups).forEach(([drugType, doses]) => {
+            // Create time points for this drug (from earliest dose to +48h after latest)
+            const doseTimes = doses.map(d => new Date(d.time));
+            const earliestDose = new Date(Math.min(...doseTimes));
+            const latestDose = new Date(Math.max(...doseTimes));
+            const drugDuration = Math.min(24, this.getDrugDuration(drugType));
             
-            // Calculate duration for this specific drug
-            const drugParams = DrugParameters.getDrugParams(doseEntry.drug, doseEntry.route);
-            let duration = 48; // default 48 hours
-            if (drugParams && drugParams.halfLife) {
-                duration = Math.min(48, drugParams.halfLife * 5); // 5 half-lives
+            const timePoints = [];
+            const combinedConcentrations = [];
+            const doseHistory = this.createDoseHistory(doses);
+            
+            // Generate time points from start to end
+            const plotStart = new Date(Math.min(startTime.getTime(), earliestDose.getTime()));
+            const plotEnd = new Date(latestDose.getTime() + drugDuration * 60 * 60 * 1000);
+            
+            for (let t = plotStart.getTime(); t <= plotEnd.getTime(); t += 15 * 60 * 1000) { // 15-min intervals
+                const currentTime = new Date(t);
+                timePoints.push(currentTime);
+                
+                // Calculate combined concentration from all doses of this drug
+                let totalConcentration = 0;
+                doses.forEach(doseEntry => {
+                    const doseTime = new Date(doseEntry.time);
+                    const timeDiffHours = (currentTime - doseTime) / (1000 * 60 * 60);
+                    
+                    if (timeDiffHours >= 0) {
+                        const dose = DrugParameters.convertDose(doseEntry.dose, doseEntry.unit, doseEntry.drug);
+                        const concentration = PharmacokineticCalculator.calculateConcentration(
+                            dose, doseEntry.drug, doseEntry.route, timeDiffHours, bodyWeight, age
+                        );
+                        totalConcentration += concentration;
+                    }
+                });
+                
+                combinedConcentrations.push(totalConcentration);
             }
             
-            const curve = PharmacokineticCalculator.generateCurve(
-                dose, doseEntry.drug, doseEntry.route, doseStartTime, bodyWeight, age, duration
-            );
-            
             // Create plot trace
-            const drugName = doseEntry.drug.charAt(0).toUpperCase() + doseEntry.drug.slice(1);
-            const traceName = `${drugName} ${doseEntry.dose}${doseEntry.unit} (${doseEntry.route})`;
+            const drugName = drugType.charAt(0).toUpperCase() + drugType.slice(1);
+            const traceName = `${drugName} (${doses.length} dose${doses.length > 1 ? 's' : ''})`;
             
             plotData.push({
-                x: curve.timePoints,
-                y: curve.concentrations,
+                x: timePoints,
+                y: combinedConcentrations,
                 mode: 'lines',
                 name: traceName,
                 line: { 
-                    color: drugColors[doseEntry.drug],
+                    color: drugColors[drugType],
                     width: 3
                 },
-                hovertemplate: `<b>${traceName}</b><br>` +
+                hovertemplate: `<b>${drugName}</b><br>` +
                               `Time: %{x}<br>` +
-                              `Concentration: %{y:.2f} ng/mL<br>` +
+                              `Total Concentration: %{y:.2f} ng/mL<br>` +
+                              `Doses: ${doseHistory}<br>` +
                               `<extra></extra>`
             });
         });
@@ -265,7 +352,7 @@ class DrugConcentrationApp {
             xaxis: {
                 gridcolor: '#E0E0E0',
                 gridwidth: 1,
-                tickformat: '%b %d %H:%M',
+                tickformat: '%H:%M',
                 range: [startTime, endTime],
                 dtick: 30 * 60 * 1000 // 30-minute intervals in milliseconds
             },
@@ -287,7 +374,8 @@ class DrugConcentrationApp {
                 borderwidth: 1
             },
             margin: { l: 80, r: 150, t: 80, b: 80 },
-            hovermode: 'x unified'
+            hovermode: 'x unified',
+            annotations: this.createDateAnnotations(startTime, endTime)
         };
         
         // Plot configuration
@@ -320,54 +408,82 @@ class DrugConcentrationApp {
         
         // Plot from rounded current time 
         const startTime = roundedNow;
-        const endTime = new Date(latestTime.getTime() + 48 * 60 * 60 * 1000);
+        const endTime = new Date(latestTime.getTime() + 24 * 60 * 60 * 1000);
         
         // Drug colors for plotting
         const drugColors = {
             alcohol: '#FF6B6B',
             thc: '#4ECDC4',
+            cbd: '#95A5A6',
             mdma: '#45B7D1',
             psilocybin: '#96CEB4'
         };
         
-        // Generate normalized curves for each dose
-        this.doses.forEach((doseEntry, index) => {
-            const dose = DrugParameters.convertDose(doseEntry.dose, doseEntry.unit, doseEntry.drug);
-            const doseStartTime = new Date(doseEntry.time);
+        // Group doses by drug type for additive effects
+        const drugGroups = {};
+        this.doses.forEach(doseEntry => {
+            if (!drugGroups[doseEntry.drug]) {
+                drugGroups[doseEntry.drug] = [];
+            }
+            drugGroups[doseEntry.drug].push(doseEntry);
+        });
+        
+        // Generate combined normalized curves for each drug type
+        Object.entries(drugGroups).forEach(([drugType, doses]) => {
+            // Create time points for this drug
+            const doseTimes = doses.map(d => new Date(d.time));
+            const earliestDose = new Date(Math.min(...doseTimes));
+            const latestDose = new Date(Math.max(...doseTimes));
+            const drugDuration = Math.min(24, this.getDrugDuration(drugType));
             
-            // Calculate duration for this specific drug
-            const drugParams = DrugParameters.getDrugParams(doseEntry.drug, doseEntry.route);
-            let duration = 48; // default 48 hours
-            if (drugParams && drugParams.halfLife) {
-                duration = Math.min(48, drugParams.halfLife * 5); // 5 half-lives
+            const timePoints = [];
+            const combinedNormalizedConcentrations = [];
+            const doseHistory = this.createDoseHistory(doses);
+            
+            // Generate time points from start to end
+            const plotStart = new Date(Math.min(startTime.getTime(), earliestDose.getTime()));
+            const plotEnd = new Date(latestDose.getTime() + drugDuration * 60 * 60 * 1000);
+            
+            for (let t = plotStart.getTime(); t <= plotEnd.getTime(); t += 15 * 60 * 1000) { // 15-min intervals
+                const currentTime = new Date(t);
+                timePoints.push(currentTime);
+                
+                // Calculate combined normalized concentration from all doses of this drug
+                let totalConcentration = 0;
+                doses.forEach(doseEntry => {
+                    const doseTime = new Date(doseEntry.time);
+                    const timeDiffHours = (currentTime - doseTime) / (1000 * 60 * 60);
+                    
+                    if (timeDiffHours >= 0) {
+                        const dose = DrugParameters.convertDose(doseEntry.dose, doseEntry.unit, doseEntry.drug);
+                        const concentration = PharmacokineticCalculator.calculateConcentration(
+                            dose, doseEntry.drug, doseEntry.route, timeDiffHours, bodyWeight, age
+                        );
+                        const normalizedConc = DrugNormalization.normalizeToSubjectiveEffects(concentration, doseEntry.drug);
+                        totalConcentration += normalizedConc;
+                    }
+                });
+                
+                combinedNormalizedConcentrations.push(totalConcentration);
             }
             
-            const curve = PharmacokineticCalculator.generateCurve(
-                dose, doseEntry.drug, doseEntry.route, doseStartTime, bodyWeight, age, duration
-            );
-            
-            // Normalize concentrations to subjective effects
-            const normalizedConcentrations = curve.concentrations.map(conc => 
-                DrugNormalization.normalizeToSubjectiveEffects(conc, doseEntry.drug)
-            );
-            
-            
             // Create plot trace
-            const drugName = doseEntry.drug.charAt(0).toUpperCase() + doseEntry.drug.slice(1);
-            const traceName = `${drugName} ${doseEntry.dose}${doseEntry.unit} (${doseEntry.route})`;
+            const drugName = drugType.charAt(0).toUpperCase() + drugType.slice(1);
+            const traceName = `${drugName} (${doses.length} dose${doses.length > 1 ? 's' : ''})`;
             
             plotData.push({
-                x: curve.timePoints,
-                y: normalizedConcentrations,
+                x: timePoints,
+                y: combinedNormalizedConcentrations,
                 mode: 'lines',
                 name: traceName,
                 line: { 
-                    color: drugColors[doseEntry.drug],
+                    color: drugColors[drugType],
                     width: 3
                 },
-                hovertemplate: `<b>${traceName}</b><br>` +
+                hovertemplate: `<b>${drugName}</b><br>` +
                               `Time: %{x}<br>` +
-                              `Subjective Effect Level: %{y:.1f} mg/dL BAC-equiv<br>` +
+                              `Total Effect Level: %{y:.1f} mg/dL BAC-equiv<br>` +
+                              `Doses: ${doseHistory}<br>` +
                               `<extra></extra>`
             });
         });
@@ -425,7 +541,7 @@ class DrugConcentrationApp {
             xaxis: {
                 gridcolor: '#E0E0E0',
                 gridwidth: 1,
-                tickformat: '%b %d %H:%M',
+                tickformat: '%H:%M',
                 range: [startTime, endTime],
                 dtick: 30 * 60 * 1000 // 30-minute intervals in milliseconds
             },
@@ -447,7 +563,8 @@ class DrugConcentrationApp {
                 borderwidth: 1
             },
             margin: { l: 80, r: 150, t: 80, b: 80 },
-            hovermode: 'x unified'
+            hovermode: 'x unified',
+            annotations: this.createDateAnnotations(startTime, endTime)
         };
         
         // Plot configuration

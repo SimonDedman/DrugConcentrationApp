@@ -20,7 +20,7 @@ class DrugParameters {
                     bioavailability: 0.08, // 4-12% average 8%
                     absorptionRate: 0.5, // hours (slower absorption)
                     eliminationRate: 0.021, // 1/hr (33-hour half-life for occasional users)
-                    volumeOfDistribution: 10, // L/kg (highly lipophilic)
+                    volumeOfDistribution: 2, // L/kg (reduced from 10 for realistic concentrations)
                     halfLife: 33, // hours (occasional users)
                     tmax: 1.5 // hours
                 },
@@ -28,15 +28,49 @@ class DrugParameters {
                     bioavailability: 0.25, // 10-35% average 25%
                     absorptionRate: 12, // very fast absorption (5 minutes = 0.083 hr)
                     eliminationRate: 0.021, // same elimination
-                    volumeOfDistribution: 10,
+                    volumeOfDistribution: 2, // L/kg (reduced from 10)
                     halfLife: 33,
                     tmax: 0.17 // ~10 minutes
+                },
+                liquid: {
+                    bioavailability: 0.15, // Between oral and inhaled
+                    absorptionRate: 2, // Faster than oral, slower than inhaled
+                    eliminationRate: 0.021,
+                    volumeOfDistribution: 2,
+                    halfLife: 33,
+                    tmax: 0.5 // 30 minutes
+                }
+            },
+            cbd: {
+                oral: {
+                    bioavailability: 0.06, // 6% oral bioavailability
+                    absorptionRate: 0.5, // Similar to THC oral
+                    eliminationRate: 0.038, // 18-32 hour half-life, average ~18h
+                    volumeOfDistribution: 32, // L/kg (highly lipophilic)
+                    halfLife: 18, // hours
+                    tmax: 2 // hours
+                },
+                inhaled: {
+                    bioavailability: 0.31, // 11-45% average 31%
+                    absorptionRate: 12, // Fast like THC
+                    eliminationRate: 0.038,
+                    volumeOfDistribution: 32,
+                    halfLife: 18,
+                    tmax: 0.25 // 15 minutes
+                },
+                liquid: {
+                    bioavailability: 0.15, // Between oral and inhaled
+                    absorptionRate: 2,
+                    eliminationRate: 0.038,
+                    volumeOfDistribution: 32,
+                    halfLife: 18,
+                    tmax: 1 // 60 minutes
                 }
             },
             mdma: {
                 oral: {
                     bioavailability: 0.75, // Variable due to non-linear kinetics
-                    absorptionRate: 2.0, // 1/hr (faster absorption to reach tmax at 2hr)
+                    absorptionRate: 0.5, // 1/hr (absorption rate to reach tmax ~2hr)
                     eliminationRate: 0.087, // 1/hr (8-hour half-life)
                     volumeOfDistribution: 4, // L/kg
                     halfLife: 8, // hours
@@ -100,32 +134,83 @@ class PharmacokineticCalculator {
         return Math.max(0, concentration);
     }
     
-    // Zero-order elimination model for alcohol
+    // Improved alcohol model with exponential elimination
     static alcoholModel(dose, params, timeHours, bodyWeight) {
-        const { bioavailability, tmax, eliminationCapacity } = params;
+        const { bioavailability, tmax } = params;
         const F = bioavailability;
         const t = timeHours;
         
         if (t <= 0) return 0;
         
-        // Use empirical BAC calculation based on known values
-        // 1 drink (14g) ≈ 25 mg/dL BAC for 70kg male after bioavailability
-        // Scale by body weight: lighter people get higher BAC
+        // Use empirical BAC calculation calibrated to Forbes chart
+        // Forbes shows 4 drinks consumed quickly = 0.08% BAC for 180lb male
+        // But single doses should be higher to account for accumulation when drinking over time
         const doseGrams = dose / 1000; // Convert mg to grams
         const effectiveDose = doseGrams * F; // Apply bioavailability
-        const peakBAC = (effectiveDose / 14) * 25 * (70 / bodyWeight); // mg/dL
+        const drinksEquivalent = effectiveDose / 14; // Number of standard drinks
+        const peakBAC = drinksEquivalent * 30 * (82 / bodyWeight); // mg/dL, increased from 20 to 30
         
-        // Absorption phase (first-order-like to peak)
+        // Absorption phase (exponential approach to peak)
         if (t <= tmax) {
-            return peakBAC * (t / tmax);
+            return peakBAC * (1 - Math.exp(-3 * t / tmax)); // 95% absorbed by tmax
         }
         
-        // Elimination phase (zero-order)
+        // Elimination phase (zero-order/linear decay)
+        // Alcohol elimination: constant rate ~15-20 mg/dL per hour
+        const eliminationRate = 15; // mg/dL per hour (constant elimination)
         const eliminationTime = t - tmax;
-        const eliminatedAmount = eliminationCapacity * eliminationTime;
-        const currentBAC = peakBAC - eliminatedAmount;
+        const currentBAC = peakBAC - (eliminationRate * eliminationTime);
         
         return Math.max(0, currentBAC);
+    }
+    
+    // Improved MDMA model based on empirical data
+    static mdmaModel(dose, params, timeHours, bodyWeight) {
+        const { bioavailability, tmax, halfLife } = params;
+        const F = bioavailability;
+        const t = timeHours;
+        
+        if (t <= 0) return 0;
+        
+        // Empirical model: 100mg MDMA ≈ 200 ng/mL peak for 70kg person
+        // Scale by dose and body weight
+        const peakConcentration = (dose * F / 100) * 200 * (70 / bodyWeight); // ng/mL
+        
+        // Use proper one-compartment kinetics for smooth curve
+        const ke = 0.693 / halfLife; // elimination rate constant
+        const ka = 3 / tmax; // absorption rate to reach ~95% of peak at tmax
+        
+        // One-compartment model: C(t) = (F*D*ka)/(Vd*(ka-ke)) * (e^(-ke*t) - e^(-ka*t))
+        // But we want to specify peak concentration directly, so:
+        const maxCoeff = ka / (ka - ke); // Maximum value of (e^(-ke*t) - e^(-ka*t))
+        const coefficient = peakConcentration / maxCoeff;
+        const currentConcentration = coefficient * (Math.exp(-ke * t) - Math.exp(-ka * t));
+        
+        return Math.max(0, currentConcentration);
+    }
+    
+    // Empirical psilocybin model based on research data
+    static psilocybinModel(dose, params, timeHours, bodyWeight) {
+        const { bioavailability, tmax, halfLife } = params;
+        const F = bioavailability;
+        const t = timeHours;
+        
+        if (t <= 0) return 0;
+        
+        // Research shows: 30mg psilocybin ≈ 21 ng/mL peak psilocin for 70kg person
+        // Scale linearly by dose and body weight
+        const peakConcentration = (dose * F / 30) * 21 * (70 / bodyWeight); // ng/mL
+        
+        // Use one-compartment kinetics for smooth curve
+        const ke = 0.693 / halfLife; // elimination rate constant
+        const ka = 3 / tmax; // absorption rate to reach ~95% of peak at tmax
+        
+        // One-compartment model scaled to desired peak
+        const maxCoeff = ka / (ka - ke);
+        const coefficient = peakConcentration / maxCoeff;
+        const currentConcentration = coefficient * (Math.exp(-ke * t) - Math.exp(-ka * t));
+        
+        return Math.max(0, currentConcentration);
     }
     
     // Calculate concentration at specific time for any drug
@@ -143,6 +228,16 @@ class PharmacokineticCalculator {
         // Special handling for alcohol (zero-order kinetics)
         if (drugType === 'alcohol') {
             return this.alcoholModel(dose, adjustedParams, timeHours, bodyWeight);
+        }
+        
+        // Special handling for MDMA (simplified model due to non-linear kinetics)
+        if (drugType === 'mdma') {
+            return this.mdmaModel(dose, adjustedParams, timeHours, bodyWeight);
+        }
+        
+        // Special handling for psilocybin (empirical model for better accuracy)
+        if (drugType === 'psilocybin') {
+            return this.psilocybinModel(dose, adjustedParams, timeHours, bodyWeight);
         }
         
         // Standard one-compartment model for other drugs
@@ -206,8 +301,12 @@ class DrugNormalization {
             alcohol: 1.0, // BAC mg/dL directly correlates with subjective impairment
             
             // THC: Peak subjective effects at ~10-20 ng/mL (inhaled), ~5-10 ng/mL (oral)
-            // Equivalent to ~0.05-0.08 BAC subjective impairment
-            thc: 4.0, // 10 ng/mL THC ≈ 40 mg/dL BAC subjectively
+            // 5mg THC should be comparable to 1-2 drinks subjectively
+            thc: 8.0, // 10 ng/mL THC ≈ 80 mg/dL BAC subjectively (increased for visibility)
+            
+            // CBD: Calming effects, should be visible but much lower than THC
+            // 25mg CBD should be like mild alcohol effects
+            cbd: 2.0, // 50 ng/mL CBD ≈ 100 mg/dL BAC subjectively (increased for visibility)
             
             // MDMA: Peak subjective effects at ~150-250 ng/mL
             // Moderate empathogenic effects ≈ 0.05-0.08 BAC equivalent  
